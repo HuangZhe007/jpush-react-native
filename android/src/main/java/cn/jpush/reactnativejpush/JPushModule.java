@@ -48,6 +48,11 @@ import cn.jpush.android.api.JPushMessage;
 import cn.jpush.android.data.JPushLocalNotification;
 import cn.jpush.android.service.JPushMessageReceiver;
 
+import android.text.TextUtils;
+import android.support.v4.app.NotificationCompat;
+import android.net.Uri;
+import android.app.PendingIntent;
+import org.json.JSONException;
 public class JPushModule extends ReactContextBaseJavaModule implements LifecycleEventListener {
 
     private static String TAG = "JPushModule";
@@ -597,11 +602,53 @@ public class JPushModule extends ReactContextBaseJavaModule implements Lifecycle
         public JPushReceiver() {
         }
 
+        private void processCustomMessage(Context context, Bundle bundle) {
+
+            NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+
+            NotificationCompat.Builder notification = new NotificationCompat.Builder(context);
+
+             String message = bundle.getString(JPushInterface.EXTRA_MESSAGE);
+            String title = bundle.getString(JPushInterface.EXTRA_TITLE);
+            notification.setAutoCancel(true)
+                    .setContentText(message)
+                    .setContentTitle(title)
+                    .setSmallIcon(R.mipmap.ic_launcher);
+            String extras = bundle.getString(JPushInterface.EXTRA_EXTRA);
+            if (!TextUtils.isEmpty(extras)) {
+                try {
+                    JSONObject extraJson = new JSONObject(extras);
+                    if (null != extraJson && extraJson.length() > 0) {
+
+                        String sound = extraJson.getString("sound");
+                        if("sound.mp3".equals(sound)){
+                            notification.setSound(Uri.parse("android.resource://" + context.getPackageName() + "/" +R.raw.sound));
+                        }else{
+                            notification.setDefaults(1);
+                        }
+
+                    }
+                } catch (JSONException e) {
+
+                }
+
+            }
+            int timecurrentTimeMillis =(int)System.currentTimeMillis()/1000 ;
+            Intent intent = new Intent();
+            intent.setClass(context, JPushReceiver.class);
+            intent.setAction(JPushInterface.ACTION_NOTIFICATION_OPENED);
+            intent.putExtras(bundle);
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(context, timecurrentTimeMillis, intent, PendingIntent.FLAG_ONE_SHOT);
+            notification.setContentIntent(pendingIntent);
+            notificationManager.notify(timecurrentTimeMillis, notification.build());
+        }
+
         @Override
         public void onReceive(Context context, Intent data) {
 
             if (JPushInterface.ACTION_MESSAGE_RECEIVED.equals(data.getAction())) {
                 mCachedBundle = data.getExtras();
+                processCustomMessage(context,mCachedBundle);
                 try {
                     String message = data.getStringExtra(JPushInterface.EXTRA_MESSAGE);
                     Logger.i(TAG, "收到自定义消息: " + message);
@@ -675,6 +722,8 @@ public class JPushModule extends ReactContextBaseJavaModule implements Lifecycle
         }
 
     }
+
+    
 
     public static class MyJPushMessageReceiver extends JPushMessageReceiver {
 
